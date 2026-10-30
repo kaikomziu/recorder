@@ -77,11 +77,15 @@ main{
 }
 .k b{font-size:20px;font-weight:900}
 .k small{font-size:11px;color:var(--muted)}
-.k kbd{position:absolute;top:5px;right:7px;font-family:ui-monospace,monospace;font-size:10px;color:var(--muted)}
+.k kbd{
+  margin-top:4px;font-family:ui-monospace,monospace;font-size:15px;font-weight:700;color:var(--ink);
+  background:var(--panel);border:1px solid var(--line);border-bottom-width:3px;border-radius:6px;padding:1px 7px;
+}
+.k kbd.none{visibility:hidden}
 .k.high{background:color-mix(in srgb,var(--key) 70%,var(--accent-soft))}
 .k.sharp b{font-size:17px}
 .k.on{background:var(--accent);color:#fff;transform:translateY(3px);box-shadow:0 0 0 var(--line)}
-.k.on small,.k.on kbd{color:#fff}
+.k.on small{color:#fff}
 .k.target{outline:3px solid var(--accent);outline-offset:2px}
 
 .controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px;font-size:14px;color:var(--muted)}
@@ -103,6 +107,19 @@ select,.btn{
   text-align:center;font-weight:700;font-size:15px;transition:background .1s,transform .1s;
 }
 .n.long{min-width:56px}
+.n i{display:block;font-style:normal;font-size:11px;font-family:ui-monospace,monospace;opacity:.7}
+.easy{
+  display:flex;align-items:center;gap:8px;padding:10px 12px;margin-bottom:12px;border-radius:12px;
+  background:var(--accent-soft);font-weight:700;cursor:pointer;
+}
+.easy input{width:20px;height:20px;accent-color:var(--accent)}
+.easy small{font-weight:500;color:var(--muted)}
+.tap{
+  display:none;width:100%;margin-top:12px;padding:18px;border:0;border-radius:14px;font:inherit;font-size:18px;font-weight:900;
+  background:var(--accent);color:#fff;cursor:pointer;touch-action:none;user-select:none;box-shadow:0 4px 0 rgba(0,0,0,.18);
+}
+.tap:active{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.18)}
+.easy-on .tap{display:block}
 .n.done{opacity:.4}
 .n.cur{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(1.1)}
 .n.miss{animation:shake .25s}
@@ -146,14 +163,19 @@ footer{max-width:1080px;margin:0 auto;padding:0 16px 32px;color:var(--muted);fon
       </div>
     </section>
 
-    <section class="card">
+    <section class="card" id="songCard">
       <h2>曲れんしゅう</h2>
+      <label class="easy">
+        <input type="checkbox" id="easy">
+        かんたんモード <small>どのキーを押しても、曲の次の音が鳴る</small>
+      </label>
       <div class="song-head">
         <select id="songSel" aria-label="曲をえらぶ"></select>
         <button class="btn primary" id="demo">▶ お手本</button>
         <button class="btn" id="reset">さいしょから</button>
       </div>
       <div class="score" id="score"></div>
+      <button class="tap" id="tap">ここを押しても吹けるよ</button>
       <div class="msg" id="msg"></div>
     </section>
 
@@ -163,7 +185,7 @@ footer{max-width:1080px;margin:0 auto;padding:0 16px 32px;color:var(--muted);fon
     </section>
   </div>
 </main>
-<footer>キーボード：A S D F G H J K L ; = ド〜高いミ ／ T = ファ♯ ／ U = シ♭ ／ スペース = 今の指使いで吹く</footer>
+<footer>キーボード：A S D F G H J K L ; = ド〜高いミ（数字の 1〜0 でもOK）／ T = ファ♯ ／ U = シ♭ ／ スペース = 今の指使いで吹く</footer>
 
 <script>
 // 指使い：[裏, 1, 2, 3, 4, 5, 6, 7]  1=ふさぐ 0=開ける 0.5=半分
@@ -186,7 +208,10 @@ const NOTES = [
 ];
 const BY_ID = Object.fromEntries(NOTES.map(n => [n.id, n]));
 const BY_CODE = Object.fromEntries(NOTES.filter(n => n.code).map(n => [n.code, n]));
+// 数字キー 1〜0 でもド〜高いミを吹ける
+['C5','D5','E5','F5','G5','A5','B5','C6','D6','E6'].forEach((id, i) => { BY_CODE['Digit' + ((i + 1) % 10)] = BY_ID[id]; });
 const KEY_LABEL = {Semicolon:';', Quote:':'};
+const keyName = n => n.code ? (KEY_LABEL[n.code] || n.code.replace('Key', '')) : '';
 
 // 曲データ：[音id, 拍]
 const SONGS = [
@@ -384,12 +409,30 @@ const keyEls = {};
 for (const n of NOTES) {
   const b = document.createElement('button');
   b.className = 'k' + (n.high ? ' high' : '') + (n.sharp ? ' sharp' : '');
-  b.innerHTML = `<b>${n.name}</b><small>${n.sub}</small>` + (n.code ? `<kbd>${KEY_LABEL[n.code] || n.code.replace('Key', '')}</kbd>` : '');
-  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture?.(e.pointerId); press(n); });
-  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, () => release(n)));
+  b.innerHTML = `<b>${n.name}</b><small>${n.sub}</small><kbd class="${n.code ? '' : 'none'}">${keyName(n) || '-'}</kbd>`;
+  b.dataset.id = n.id;
   b.addEventListener('contextmenu', e => e.preventDefault());
   keysBox.appendChild(b); keyEls[n.id] = b;
 }
+// マウスを押したまま音ボタンをなぞると、指を変えるように音が移る
+let mouseNote = null;
+function mouseTo(n){
+  if (n === mouseNote) return;
+  const prev = mouseNote; mouseNote = n;
+  if (n) press(n);
+  if (prev) release(prev);
+}
+keysBox.addEventListener('pointerdown', e => {
+  const b = e.target.closest('.k'); if (!b) return;
+  e.preventDefault(); keysBox.releasePointerCapture?.(e.pointerId);
+  mouseTo(BY_ID[b.dataset.id]);
+});
+keysBox.addEventListener('pointermove', e => {
+  if (!mouseNote) return;
+  const b = document.elementFromPoint(e.clientX, e.clientY)?.closest('.k');
+  if (b) mouseTo(BY_ID[b.dataset.id]);
+});
+['pointerup', 'pointercancel'].forEach(ev => window.addEventListener(ev, () => mouseTo(null)));
 
 /* ---------- 吹くボタン・キーボード ---------- */
 const blowBtn = document.getElementById('blow');
@@ -398,17 +441,37 @@ blowBtn.addEventListener('pointerdown', e => { e.preventDefault(); blowBtn.setPo
 ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => blowBtn.addEventListener(ev, () => setBlow(false)));
 blowBtn.addEventListener('contextmenu', e => e.preventDefault());
 
+// かんたんモードで押したキー → 鳴らした音
+const easyHeld = {};
+let easy = false;
+function easyNext(){
+  if (demoing) return null;
+  if (pos >= song.notes.length) resetSong();
+  return BY_ID[song.notes[pos].id];
+}
 window.addEventListener('keydown', e => {
   if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') {
+    // 矢印キーなどはそのまま、吹くキーなら操作部品からフォーカスを外して吹く
+    if (!BY_CODE[e.code] && e.code !== 'Space' && !easy) return;
+    e.target.blur();
+  }
+  if (easy && !['Tab', 'Escape'].includes(e.code)) {
+    e.preventDefault();
+    const n = easyNext(); if (n) { easyHeld[e.code] = n; press(n); }
+    return;
+  }
   if (e.code === 'Space') { e.preventDefault(); setBlow(true); return; }
   const n = BY_CODE[e.code]; if (n) { e.preventDefault(); press(n); }
 });
 window.addEventListener('keyup', e => {
+  // フォーカス中のボタンがスペースで押されてしまうのを防ぐ
+  if (e.code === 'Space' && e.target.tagName === 'BUTTON') e.preventDefault();
+  if (easyHeld[e.code]) { release(easyHeld[e.code]); delete easyHeld[e.code]; return; }
   if (e.code === 'Space') { setBlow(false); return; }
   const n = BY_CODE[e.code]; if (n) release(n);
 });
-window.addEventListener('blur', () => { held.length = 0; setBlow(false); refresh(); });
+window.addEventListener('blur', () => { held.length = 0; for (const k in easyHeld) delete easyHeld[k]; setBlow(false); refresh(); });
 
 document.getElementById('vol').addEventListener('input', e => { settings.vol = +e.target.value; if (master) master.gain.value = settings.vol; });
 document.getElementById('vib').addEventListener('input', e => { settings.vib = +e.target.value; });
@@ -448,13 +511,18 @@ function renderScore(){
     const d = document.createElement('div');
     d.className = 'n' + (x.beats >= 2 ? ' long' : '') + (i < pos ? ' done' : '') + (i === pos ? ' cur' : '');
     d.textContent = BY_ID[x.id].name.replace('高い', '↑');
+    if (!easy) { const k = document.createElement('i'); k.textContent = keyName(BY_ID[x.id]); d.appendChild(k); }
     scoreBox.appendChild(d);
   });
   document.querySelectorAll('.k.target').forEach(k => k.classList.remove('target'));
   const next = song.notes[pos];
   if (next && !demoing) keyEls[next.id].classList.add('target');
 }
-function resetSong(){ stopDemo(); pos = 0; msg.textContent = '光っている音を吹いてね'; renderScore(); }
+function resetSong(){
+  stopDemo(); pos = 0;
+  msg.textContent = easy ? 'どのキーでもいいので、リズムに合わせて押してね' : '光っている音を吹いてね（下の文字がキー）';
+  renderScore();
+}
 function onPlayed(note){
   if (demoing || pos >= song.notes.length) return;
   const want = song.notes[pos];
@@ -493,9 +561,23 @@ function demo(){
   };
   step(0);
 }
-sel.addEventListener('change', () => { song = SONGS[+sel.value]; resetSong(); });
-document.getElementById('demo').addEventListener('click', demo);
-document.getElementById('reset').addEventListener('click', resetSong);
+// 曲を選んだあともすぐキーで吹けるように、フォーカスを外す
+sel.addEventListener('change', () => { song = SONGS[+sel.value]; sel.blur(); resetSong(); });
+document.getElementById('demo').addEventListener('click', e => { e.currentTarget.blur(); demo(); });
+document.getElementById('reset').addEventListener('click', e => { e.currentTarget.blur(); resetSong(); });
+document.getElementById('easy').addEventListener('change', e => {
+  easy = e.target.checked;
+  document.getElementById('songCard').classList.toggle('easy-on', easy);
+  e.target.blur();
+  resetSong();
+});
+const tap = document.getElementById('tap');
+let tapNote = null;
+tap.addEventListener('pointerdown', e => {
+  e.preventDefault(); tap.setPointerCapture?.(e.pointerId);
+  tapNote = easyNext(); if (tapNote) press(tapNote);
+});
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => tap.addEventListener(ev, () => { if (tapNote) { release(tapNote); tapNote = null; } }));
 
 showFingering(BY_ID.C5.f);
 resetSong();

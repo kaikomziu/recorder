@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Webリコーダー</title>
+<meta name="description" content="ブラウザでソプラノリコーダーを吹けるサイト。指使いを見ながら、キーボードやタップで演奏できます。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Zen+Maru+Gothic:wght@500;700;900&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#f6efe4; --panel:#fffaf2; --ink:#3b2a1d; --muted:#8a7360; --line:#e6d6c0;
+  --wood:#e9c48f; --wood-dark:#c9975a; --wood-edge:#a87440;
+  --hole-open:#fff4e2; --hole-closed:#3b2a1d; --accent:#e0674b; --accent-soft:#fbe0d6;
+  --ok:#3f9b6b; --key:#f1e4d1; --shadow:0 2px 0 rgba(90,60,30,.12), 0 8px 24px rgba(90,60,30,.08);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1d1814; --panel:#28211b; --ink:#f3e7d6; --muted:#b29b84; --line:#3d3229;
+    --wood:#c99a5f; --wood-dark:#9b6e3d; --wood-edge:#6f4a24;
+    --hole-open:#3a2f25; --hole-closed:#fff1dc; --accent:#ff8a6b; --accent-soft:#4a2a20;
+    --ok:#6bcf98; --key:#342a22; --shadow:0 2px 0 rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1d1814; --panel:#28211b; --ink:#f3e7d6; --muted:#b29b84; --line:#3d3229;
+  --wood:#c99a5f; --wood-dark:#9b6e3d; --wood-edge:#6f4a24;
+  --hole-open:#3a2f25; --hole-closed:#fff1dc; --accent:#ff8a6b; --accent-soft:#4a2a20;
+  --ok:#6bcf98; --key:#342a22; --shadow:0 2px 0 rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.3);
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:"Zen Maru Gothic",system-ui,sans-serif; font-weight:500;
+  -webkit-tap-highlight-color:transparent; overflow-x:hidden;
+}
+header{max-width:1080px;margin:0 auto;padding:24px 16px 8px;display:flex;align-items:baseline;gap:12px;flex-wrap:wrap}
+h1{margin:0;font-size:clamp(26px,4vw,36px);font-weight:900;letter-spacing:.02em}
+header p{margin:0;color:var(--muted);font-size:14px}
+main{
+  max-width:1080px;margin:0 auto;padding:12px 16px 40px;
+  display:grid;grid-template-columns:minmax(220px,300px) 1fr;gap:20px;align-items:start;
+}
+@media (max-width:720px){ main{grid-template-columns:1fr} }
+.card{background:var(--panel);border:1px solid var(--line);border-radius:20px;box-shadow:var(--shadow);padding:18px}
+.card h2{margin:0 0 12px;font-size:16px;font-weight:700;color:var(--muted);letter-spacing:.05em}
+
+/* リコーダー本体 */
+.recorder-card{position:sticky;top:12px;display:flex;flex-direction:column;align-items:center;gap:10px}
+@media (max-width:720px){ .recorder-card{position:static;flex-direction:row;justify-content:center;flex-wrap:wrap} }
+#recorder{width:100%;max-width:200px;height:auto;touch-action:manipulation;user-select:none}
+@media (max-width:720px){ #recorder{max-width:150px} }
+.hole{cursor:pointer}
+.hole .rim{fill:var(--hole-open);stroke:var(--wood-edge);stroke-width:2.5}
+.hole .fill{fill:var(--hole-closed);transition:opacity .08s}
+.hole:hover .rim{stroke:var(--accent)}
+.now{display:flex;flex-direction:column;align-items:center;gap:2px;min-width:140px}
+.now .big{font-size:56px;font-weight:900;line-height:1.1;min-height:62px;transition:transform .08s}
+.now .big.pop{transform:scale(1.12);color:var(--accent)}
+.now .sub{color:var(--muted);font-size:14px;min-height:20px}
+.blow{
+  margin-top:6px;border:0;border-radius:999px;padding:14px 28px;font:inherit;font-weight:900;font-size:17px;
+  background:var(--accent);color:#fff;cursor:pointer;box-shadow:0 4px 0 rgba(0,0,0,.18);touch-action:none;user-select:none;
+}
+.blow:active,.blow.on{transform:translateY(3px);box-shadow:0 1px 0 rgba(0,0,0,.18)}
+.hint{font-size:12px;color:var(--muted);text-align:center;line-height:1.6}
+
+/* 音ボタン */
+.keys{display:grid;grid-template-columns:repeat(auto-fill,minmax(78px,1fr));gap:8px}
+.k{
+  position:relative;border:1px solid var(--line);background:var(--key);color:var(--ink);border-radius:14px;
+  padding:12px 4px 10px;font:inherit;cursor:pointer;touch-action:none;user-select:none;
+  display:flex;flex-direction:column;align-items:center;gap:2px;transition:transform .05s, background .1s;
+  box-shadow:0 3px 0 var(--line);
+}
+.k b{font-size:20px;font-weight:900}
+.k small{font-size:11px;color:var(--muted)}
+.k kbd{position:absolute;top:5px;right:7px;font-family:ui-monospace,monospace;font-size:10px;color:var(--muted)}
+.k.high{background:color-mix(in srgb,var(--key) 70%,var(--accent-soft))}
+.k.sharp b{font-size:17px}
+.k.on{background:var(--accent);color:#fff;transform:translateY(3px);box-shadow:0 0 0 var(--line)}
+.k.on small,.k.on kbd{color:#fff}
+.k.target{outline:3px solid var(--accent);outline-offset:2px}
+
+.controls{display:flex;flex-wrap:wrap;gap:10px;align-items:center;margin-top:14px;font-size:14px;color:var(--muted)}
+.controls label{display:flex;align-items:center;gap:6px}
+input[type=range]{accent-color:var(--accent)}
+select,.btn{
+  font:inherit;font-size:14px;border:1px solid var(--line);background:var(--key);color:var(--ink);
+  border-radius:10px;padding:8px 12px;cursor:pointer;
+}
+.btn.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:700}
+.stack{display:flex;flex-direction:column;gap:20px;min-width:0}
+
+/* 曲れんしゅう */
+.song-head{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:12px}
+.song-head select{flex:1 1 160px}
+.score{display:flex;flex-wrap:wrap;gap:6px;padding:4px 0}
+.n{
+  min-width:38px;padding:6px 6px;border-radius:10px;background:var(--key);border:1px solid var(--line);
+  text-align:center;font-weight:700;font-size:15px;transition:background .1s,transform .1s;
+}
+.n.long{min-width:56px}
+.n.done{opacity:.4}
+.n.cur{background:var(--accent);color:#fff;border-color:var(--accent);transform:scale(1.1)}
+.n.miss{animation:shake .25s}
+@keyframes shake{25%{transform:translateX(-4px) scale(1.1)}75%{transform:translateX(4px) scale(1.1)}}
+.msg{margin-top:10px;min-height:22px;font-weight:700;color:var(--ok)}
+
+.chart{display:grid;grid-template-columns:repeat(auto-fill,minmax(64px,1fr));gap:10px}
+.chart button{
+  border:1px solid var(--line);background:var(--key);border-radius:12px;padding:6px 2px 4px;cursor:pointer;
+  display:flex;flex-direction:column;align-items:center;font:inherit;color:var(--ink);
+}
+.chart svg{width:26px;height:auto}
+.chart span{font-size:13px;font-weight:700}
+footer{max-width:1080px;margin:0 auto;padding:0 16px 32px;color:var(--muted);font-size:12px}
+</style>
+</head>
+<body>
+<header>
+  <h1>🎵 Webリコーダー</h1>
+  <p>ソプラノリコーダー（バロック式）をブラウザで吹こう</p>
+</header>
+
+<main>
+  <section class="card recorder-card" aria-label="リコーダー">
+    <svg id="recorder" viewBox="0 0 200 640" role="img" aria-label="リコーダーの指使い"></svg>
+    <div class="now">
+      <div class="big" id="noteBig">–</div>
+      <div class="sub" id="noteSub">音をえらんでね</div>
+      <button class="blow" id="blow">ふーっ（吹く）</button>
+      <div class="hint">穴をタップしてふさぎ、<br>「吹く」かスペースキーで鳴らす<br>（裏の穴は 開→閉→半分）</div>
+    </div>
+  </section>
+
+  <div class="stack">
+    <section class="card">
+      <h2>音ボタン（押している間なる）</h2>
+      <div class="keys" id="keys"></div>
+      <div class="controls">
+        <label>音量 <input type="range" id="vol" min="0" max="1" step="0.01" value="0.6"></label>
+        <label>ビブラート <input type="range" id="vib" min="0" max="1" step="0.01" value="0.4"></label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>曲れんしゅう</h2>
+      <div class="song-head">
+        <select id="songSel" aria-label="曲をえらぶ"></select>
+        <button class="btn primary" id="demo">▶ お手本</button>
+        <button class="btn" id="reset">さいしょから</button>
+      </div>
+      <div class="score" id="score"></div>
+      <div class="msg" id="msg"></div>
+    </section>
+
+    <section class="card">
+      <h2>運指表（タップで指使いを表示）</h2>
+      <div class="chart" id="chart"></div>
+    </section>
+  </div>
+</main>
+<footer>キーボード：A S D F G H J K L ; = ド〜高いミ ／ T = ファ♯ ／ U = シ♭ ／ スペース = 今の指使いで吹く</footer>
+
+<script>
+// 指使い：[裏, 1, 2, 3, 4, 5, 6, 7]  1=ふさぐ 0=開ける 0.5=半分
+const NOTES = [
+  {id:'C5',  name:'ド',     sub:'C',  midi:72, code:'KeyA',      f:[1,1,1,1,1,1,1,1]},
+  {id:'D5',  name:'レ',     sub:'D',  midi:74, code:'KeyS',      f:[1,1,1,1,1,1,1,0]},
+  {id:'E5',  name:'ミ',     sub:'E',  midi:76, code:'KeyD',      f:[1,1,1,1,1,1,0,0]},
+  {id:'F5',  name:'ファ',   sub:'F',  midi:77, code:'KeyF',      f:[1,1,1,1,1,0,1,1]},
+  {id:'Fs5', name:'ファ♯',  sub:'F♯', midi:78, code:'KeyT',      f:[1,1,1,1,0,1,1,0], sharp:true},
+  {id:'G5',  name:'ソ',     sub:'G',  midi:79, code:'KeyG',      f:[1,1,1,1,0,0,0,0]},
+  {id:'A5',  name:'ラ',     sub:'A',  midi:81, code:'KeyH',      f:[1,1,1,0,0,0,0,0]},
+  {id:'Bb5', name:'シ♭',    sub:'B♭', midi:82, code:'KeyU',      f:[1,1,0,1,1,0,0,0], sharp:true},
+  {id:'B5',  name:'シ',     sub:'B',  midi:83, code:'KeyJ',      f:[1,1,0,0,0,0,0,0]},
+  {id:'C6',  name:'高いド', sub:'C',  midi:84, code:'KeyK',      f:[1,0,1,0,0,0,0,0], high:true},
+  {id:'D6',  name:'高いレ', sub:'D',  midi:86, code:'KeyL',      f:[0,0,1,0,0,0,0,0], high:true},
+  {id:'E6',  name:'高いミ', sub:'E',  midi:88, code:'Semicolon', f:[0.5,1,1,1,1,1,0,0], high:true},
+  {id:'F6',  name:'高いファ',sub:'F', midi:89, code:'Quote',     f:[0.5,1,1,1,1,0,1,0], high:true},
+  {id:'G6',  name:'高いソ', sub:'G',  midi:91, code:null,        f:[0.5,1,1,1,0,0,0,0], high:true},
+  {id:'A6',  name:'高いラ', sub:'A',  midi:93, code:null,        f:[0.5,1,1,0,0,0,0,0], high:true},
+];
+const BY_ID = Object.fromEntries(NOTES.map(n => [n.id, n]));
+const BY_CODE = Object.fromEntries(NOTES.filter(n => n.code).map(n => [n.code, n]));
+const KEY_LABEL = {Semicolon:';', Quote:':'};
+
+// 曲データ：[音id, 拍]
+const SONGS = [
+  {title:'かえるのうた', bpm:110, notes:
+    'C5:1 D5:1 E5:1 F5:1 E5:1 D5:1 C5:2 E5:1 F5:1 G5:1 A5:1 G5:1 F5:1 E5:2 C5:2 C5:2 C5:2 C5:2 C5:.5 C5:.5 D5:.5 D5:.5 E5:.5 E5:.5 F5:.5 F5:.5 E5:1 D5:1 C5:2'},
+  {title:'きらきら星', bpm:100, notes:
+    'C5:1 C5:1 G5:1 G5:1 A5:1 A5:1 G5:2 F5:1 F5:1 E5:1 E5:1 D5:1 D5:1 C5:2 G5:1 G5:1 F5:1 F5:1 E5:1 E5:1 D5:2 G5:1 G5:1 F5:1 F5:1 E5:1 E5:1 D5:2 C5:1 C5:1 G5:1 G5:1 A5:1 A5:1 G5:2 F5:1 F5:1 E5:1 E5:1 D5:1 D5:1 C5:2'},
+  {title:'メリーさんのひつじ', bpm:110, notes:
+    'E5:1.5 D5:.5 C5:1 D5:1 E5:1 E5:1 E5:2 D5:1 D5:1 D5:2 E5:1 G5:1 G5:2 E5:1.5 D5:.5 C5:1 D5:1 E5:1 E5:1 E5:2 D5:1 D5:1 E5:1.5 D5:.5 C5:4'},
+  {title:'よろこびの歌', bpm:120, notes:
+    'E5:1 E5:1 F5:1 G5:1 G5:1 F5:1 E5:1 D5:1 C5:1 C5:1 D5:1 E5:1 E5:1.5 D5:.5 D5:2 E5:1 E5:1 F5:1 G5:1 G5:1 F5:1 E5:1 D5:1 C5:1 C5:1 D5:1 E5:1 D5:1.5 C5:.5 C5:2'},
+  {title:'ドレミの音階', bpm:90, notes:
+    'C5:1 D5:1 E5:1 F5:1 G5:1 A5:1 B5:1 C6:2 B5:1 A5:1 G5:1 F5:1 E5:1 D5:1 C5:2'},
+].map(s => ({...s, notes: s.notes.split(' ').map(t => { const [id, b] = t.split(':'); return {id, beats:+b}; })}));
+
+/* ---------- 音づくり（Web Audio） ---------- */
+let ctx, master, wave, noiseBuf, voice = null;
+const settings = {vol:0.6, vib:0.4};
+function initAudio(){
+  if (ctx) { if (ctx.state === 'suspended') ctx.resume(); return; }
+  ctx = new (window.AudioContext || window.webkitAudioContext)();
+  const comp = ctx.createDynamicsCompressor();
+  master = ctx.createGain(); master.gain.value = settings.vol;
+  master.connect(comp); comp.connect(ctx.destination);
+  // リコーダーらしい倍音（基音が強く、倍音はひかえめ）
+  const real = new Float32Array([0, 1, 0.18, 0.11, 0.04, 0.03, 0.012]);
+  wave = ctx.createPeriodicWave(real, new Float32Array(real.length));
+  noiseBuf = ctx.createBuffer(1, ctx.sampleRate * 2, ctx.sampleRate);
+  const d = noiseBuf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+}
+const hz = m => 440 * Math.pow(2, (m - 69) / 12);
+
+function startTone(midi){
+  initAudio();
+  const t = ctx.currentTime, f = hz(midi);
+  if (voice) {
+    // 吹いたまま指を変えたときはなめらかに音程を移す
+    voice.osc.frequency.cancelScheduledValues(t);
+    voice.osc.frequency.setTargetAtTime(f, t, 0.012);
+    voice.bp.frequency.setTargetAtTime(f * 2, t, 0.012);
+    voice.chiff.gain.cancelScheduledValues(t);
+    voice.chiff.gain.setValueAtTime(0.06, t);
+    voice.chiff.gain.setTargetAtTime(0.012, t + 0.02, 0.03);
+    return;
+  }
+  const osc = ctx.createOscillator(); osc.setPeriodicWave(wave); osc.frequency.value = f;
+  const lp = ctx.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = 4200;
+  const env = ctx.createGain(); env.gain.setValueAtTime(0, t);
+  env.gain.linearRampToValueAtTime(0.42, t + 0.035);
+  env.gain.setTargetAtTime(0.32, t + 0.035, 0.08);
+  osc.connect(lp); lp.connect(env); env.connect(master);
+
+  // ビブラート（少し遅れてかかる）
+  const lfo = ctx.createOscillator(); lfo.frequency.value = 5.2;
+  const lfoGain = ctx.createGain(); lfoGain.gain.setValueAtTime(0, t);
+  lfoGain.gain.linearRampToValueAtTime(f * 0.007 * settings.vib, t + 0.45);
+  lfo.connect(lfoGain); lfoGain.connect(osc.frequency);
+
+  // 息の音（吹き始めの「ぷっ」と、ずっと鳴るかすかな息）
+  const noise = ctx.createBufferSource(); noise.buffer = noiseBuf; noise.loop = true;
+  const bp = ctx.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = f * 2; bp.Q.value = 1.2;
+  const chiff = ctx.createGain(); chiff.gain.setValueAtTime(0.0001, t);
+  chiff.gain.linearRampToValueAtTime(0.16, t + 0.012);
+  chiff.gain.setTargetAtTime(0.012, t + 0.02, 0.04);
+  noise.connect(bp); bp.connect(chiff); chiff.connect(env);
+
+  osc.start(t); lfo.start(t); noise.start(t);
+  voice = {osc, lfo, noise, env, bp, chiff};
+}
+function stopTone(){
+  if (!voice) return;
+  const v = voice, t = ctx.currentTime;
+  v.env.gain.cancelScheduledValues(t);
+  v.env.gain.setValueAtTime(v.env.gain.value, t);
+  v.env.gain.setTargetAtTime(0, t, 0.025);
+  [v.osc, v.lfo, v.noise].forEach(n => n.stop(t + 0.2));
+  voice = null;
+}
+
+/* ---------- リコーダーの絵 ---------- */
+const svg = document.getElementById('recorder');
+const NS = 'http://www.w3.org/2000/svg';
+const HOLE_POS = [[38,150],[100,170],[100,218],[100,266],[100,340],[100,388],[100,436],[100,488]];
+const el = (tag, attrs, parent) => { const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); (parent || svg).appendChild(e); return e; };
+function drawRecorder(){
+  const defs = el('defs', {});
+  const g = el('linearGradient', {id:'wood', x1:0, x2:1}, defs);
+  el('stop', {offset:'0', 'stop-color':'var(--wood-dark)'}, g);
+  el('stop', {offset:'.45', 'stop-color':'var(--wood)'}, g);
+  el('stop', {offset:'1', 'stop-color':'var(--wood-dark)'}, g);
+  // 頭部管
+  el('path', {d:'M84 14 Q100 6 116 14 L124 112 L76 112 Z', fill:'url(#wood)', stroke:'var(--wood-edge)', 'stroke-width':2});
+  el('rect', {x:90, y:74, width:20, height:12, rx:2, fill:'var(--hole-closed)', opacity:.75});
+  el('rect', {x:74, y:108, width:52, height:10, rx:4, fill:'var(--wood-dark)', stroke:'var(--wood-edge)', 'stroke-width':2});
+  // 中部管
+  el('rect', {x:78, y:118, width:44, height:400, fill:'url(#wood)', stroke:'var(--wood-edge)', 'stroke-width':2});
+  el('rect', {x:74, y:512, width:52, height:10, rx:4, fill:'var(--wood-dark)', stroke:'var(--wood-edge)', 'stroke-width':2});
+  // 足部管
+  el('path', {d:'M78 522 L122 522 L130 620 Q100 632 70 620 Z', fill:'url(#wood)', stroke:'var(--wood-edge)', 'stroke-width':2});
+  // 裏の穴の表示
+  el('line', {x1:52, y1:150, x2:78, y2:150, stroke:'var(--muted)', 'stroke-dasharray':'3 3', 'stroke-width':1.5});
+  const lbl = el('text', {x:38, y:186, 'text-anchor':'middle', 'font-size':14, fill:'var(--muted)', 'font-weight':700});
+  lbl.textContent = '裏';
+  // 左手・右手の目印
+  const lh = el('text', {x:150, y:222, 'font-size':13, fill:'var(--muted)'}); lh.textContent = '左手';
+  const rh = el('text', {x:150, y:418, 'font-size':13, fill:'var(--muted)'}); rh.textContent = '右手';
+
+  return HOLE_POS.map(([x, y], i) => {
+    const r = i === 0 ? 13 : (i >= 6 ? 10 : 12);
+    const grp = el('g', {class:'hole', 'data-i':i, tabindex:0, role:'button', 'aria-label': i === 0 ? '裏の穴' : `${i}番の穴`});
+    el('circle', {cx:x, cy:y, r:r + 8, fill:'transparent'}, grp); // タップしやすく
+    el('circle', {class:'rim', cx:x, cy:y, r}, grp);
+    const full = el('circle', {class:'fill', cx:x, cy:y, r:r - 1}, grp);
+    const half = el('path', {class:'fill', d:`M${x} ${y - r + 1} A${r - 1} ${r - 1} 0 0 0 ${x} ${y + r - 1} Z`}, grp);
+    const n = el('text', {x: i === 0 ? x : x - 30, y: y + 4, 'text-anchor':'middle', 'font-size':11, fill:'var(--muted)'}, grp);
+    n.textContent = i === 0 ? '0' : i;
+    return {grp, full, half};
+  });
+}
+const holes = drawRecorder();
+let fingering = [1,1,1,1,1,1,1,1];
+function showFingering(f){
+  fingering = f.slice();
+  holes.forEach((h, i) => {
+    h.full.style.opacity = f[i] === 1 ? 1 : 0;
+    h.half.style.opacity = f[i] === 0.5 ? 1 : 0;
+  });
+}
+function findByFingering(f){
+  const exact = NOTES.find(n => n.f.every((v, i) => v === f[i]));
+  if (exact) return {note: exact, exact: true};
+  // 表にない指使いは一番近い音で鳴らす
+  let best = NOTES[0], bestD = Infinity;
+  for (const n of NOTES) {
+    const d = n.f.reduce((s, v, i) => s + Math.abs(v - f[i]) * (i === 0 ? 2 : 1) * (8 - i), 0);
+    if (d < bestD) { bestD = d; best = n; }
+  }
+  return {note: best, exact: false};
+}
+holes.forEach((h, i) => {
+  const toggle = e => {
+    e.preventDefault();
+    const f = fingering.slice();
+    f[i] = i === 0 ? (f[i] === 0 ? 1 : f[i] === 1 ? 0.5 : 0) : (f[i] ? 0 : 1);
+    showFingering(f);
+    if (blowing) playFingering();
+    else previewFingering();
+  };
+  h.grp.addEventListener('pointerdown', toggle);
+  h.grp.addEventListener('keydown', e => { if (e.key === 'Enter') toggle(e); });
+});
+function previewFingering(){
+  const {note, exact} = findByFingering(fingering);
+  setDisplay(note, exact ? '' : '（表にない指使い・近い音）');
+}
+
+/* ---------- 表示 ---------- */
+const big = document.getElementById('noteBig'), sub = document.getElementById('noteSub');
+function setDisplay(note, extra = ''){
+  big.textContent = note.name;
+  sub.textContent = `${note.sub}${note.id.endsWith('6') ? '（高音）' : ''} ${extra}`.trim();
+}
+
+/* ---------- 演奏の中心：今鳴らす音 ---------- */
+const held = [];        // 押されている音ボタン/キー（後勝ち）
+let blowing = false;    // 「吹く」ボタン・スペース
+let current = null;
+function refresh(){
+  const top = held[held.length - 1];
+  let note = null;
+  if (top) { note = top; showFingering(top.f); }
+  else if (blowing) note = findByFingering(fingering).note;
+  document.querySelectorAll('.k.on').forEach(k => k.classList.remove('on'));
+  if (note) {
+    keyEls[note.id]?.classList.add('on');
+    if (note !== current) {
+      startTone(note.midi);
+      setDisplay(note, top || findByFingering(fingering).exact ? '' : '（近い音）');
+      big.classList.add('pop');
+      onPlayed(note);
+    }
+  } else {
+    stopTone(); big.classList.remove('pop');
+  }
+  current = note;
+}
+function playFingering(){ current = null; refresh(); }
+function press(note){ if (!held.includes(note)) { held.push(note); refresh(); } }
+function release(note){ const i = held.indexOf(note); if (i >= 0) { held.splice(i, 1); refresh(); } }
+
+/* ---------- 音ボタン ---------- */
+const keysBox = document.getElementById('keys');
+const keyEls = {};
+for (const n of NOTES) {
+  const b = document.createElement('button');
+  b.className = 'k' + (n.high ? ' high' : '') + (n.sharp ? ' sharp' : '');
+  b.innerHTML = `<b>${n.name}</b><small>${n.sub}</small>` + (n.code ? `<kbd>${KEY_LABEL[n.code] || n.code.replace('Key', '')}</kbd>` : '');
+  b.addEventListener('pointerdown', e => { e.preventDefault(); b.setPointerCapture?.(e.pointerId); press(n); });
+  ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => b.addEventListener(ev, () => release(n)));
+  b.addEventListener('contextmenu', e => e.preventDefault());
+  keysBox.appendChild(b); keyEls[n.id] = b;
+}
+
+/* ---------- 吹くボタン・キーボード ---------- */
+const blowBtn = document.getElementById('blow');
+const setBlow = on => { if (blowing === on) return; blowing = on; blowBtn.classList.toggle('on', on); current = null; refresh(); };
+blowBtn.addEventListener('pointerdown', e => { e.preventDefault(); blowBtn.setPointerCapture?.(e.pointerId); setBlow(true); });
+['pointerup', 'pointercancel', 'lostpointercapture'].forEach(ev => blowBtn.addEventListener(ev, () => setBlow(false)));
+blowBtn.addEventListener('contextmenu', e => e.preventDefault());
+
+window.addEventListener('keydown', e => {
+  if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
+  if (e.target.tagName === 'SELECT' || e.target.tagName === 'INPUT') return;
+  if (e.code === 'Space') { e.preventDefault(); setBlow(true); return; }
+  const n = BY_CODE[e.code]; if (n) { e.preventDefault(); press(n); }
+});
+window.addEventListener('keyup', e => {
+  if (e.code === 'Space') { setBlow(false); return; }
+  const n = BY_CODE[e.code]; if (n) release(n);
+});
+window.addEventListener('blur', () => { held.length = 0; setBlow(false); refresh(); });
+
+document.getElementById('vol').addEventListener('input', e => { settings.vol = +e.target.value; if (master) master.gain.value = settings.vol; });
+document.getElementById('vib').addEventListener('input', e => { settings.vib = +e.target.value; });
+
+/* ---------- 運指表 ---------- */
+const chart = document.getElementById('chart');
+for (const n of NOTES) {
+  const b = document.createElement('button');
+  const s = document.createElementNS(NS, 'svg'); s.setAttribute('viewBox', '0 0 30 120');
+  n.f.forEach((v, i) => {
+    const cx = i === 0 ? 7 : 19, cy = i === 0 ? 10 : 14 + i * 13 + (i >= 4 ? 5 : 0);
+    const c = document.createElementNS(NS, 'circle');
+    c.setAttribute('cx', cx); c.setAttribute('cy', cy); c.setAttribute('r', 5);
+    c.setAttribute('stroke', 'var(--ink)'); c.setAttribute('stroke-width', 1.4);
+    c.setAttribute('fill', v === 1 ? 'var(--ink)' : 'transparent');
+    s.appendChild(c);
+    if (v === 0.5) {
+      const p = document.createElementNS(NS, 'path');
+      p.setAttribute('d', `M${cx} ${cy - 5} A5 5 0 0 0 ${cx} ${cy + 5} Z`); p.setAttribute('fill', 'var(--ink)');
+      s.appendChild(p);
+    }
+  });
+  b.appendChild(s);
+  const sp = document.createElement('span'); sp.textContent = n.name; b.appendChild(sp);
+  b.addEventListener('pointerdown', e => { e.preventDefault(); press(n); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => b.addEventListener(ev, () => release(n)));
+  chart.appendChild(b);
+}
+
+/* ---------- 曲れんしゅう ---------- */
+const sel = document.getElementById('songSel'), scoreBox = document.getElementById('score'), msg = document.getElementById('msg');
+SONGS.forEach((s, i) => { const o = document.createElement('option'); o.value = i; o.textContent = s.title; sel.appendChild(o); });
+let song = SONGS[0], pos = 0, demoTimer = null, demoing = false;
+function renderScore(){
+  scoreBox.innerHTML = '';
+  song.notes.forEach((x, i) => {
+    const d = document.createElement('div');
+    d.className = 'n' + (x.beats >= 2 ? ' long' : '') + (i < pos ? ' done' : '') + (i === pos ? ' cur' : '');
+    d.textContent = BY_ID[x.id].name.replace('高い', '↑');
+    scoreBox.appendChild(d);
+  });
+  document.querySelectorAll('.k.target').forEach(k => k.classList.remove('target'));
+  const next = song.notes[pos];
+  if (next && !demoing) keyEls[next.id].classList.add('target');
+}
+function resetSong(){ stopDemo(); pos = 0; msg.textContent = '光っている音を吹いてね'; renderScore(); }
+function onPlayed(note){
+  if (demoing || pos >= song.notes.length) return;
+  const want = song.notes[pos];
+  if (note.id === want.id) {
+    pos++;
+    if (pos >= song.notes.length) { msg.textContent = '🎉 さいごまで吹けたよ！'; }
+    renderScore();
+    if (pos === song.notes.length) document.querySelectorAll('.k.target').forEach(k => k.classList.remove('target'));
+  } else {
+    const c = scoreBox.children[pos];
+    c?.classList.remove('miss'); void c?.offsetWidth; c?.classList.add('miss');
+  }
+}
+function stopDemo(){
+  clearTimeout(demoTimer); demoTimer = null;
+  if (demoing) { demoing = false; held.length = 0; refresh(); }
+  document.getElementById('demo').textContent = '▶ お手本';
+}
+function demo(){
+  if (demoing) { resetSong(); return; }
+  initAudio();
+  demoing = true; pos = 0; msg.textContent = 'お手本を聴いてね'; renderScore();
+  document.getElementById('demo').textContent = '■ とめる';
+  const beat = 60000 / song.bpm;
+  const step = i => {
+    if (i >= song.notes.length) { stopDemo(); pos = 0; msg.textContent = 'こんどは吹いてみよう！'; renderScore(); return; }
+    const x = song.notes[i], n = BY_ID[x.id];
+    pos = i; renderScore();
+    held.length = 0; held.push(n); current = null; refresh();
+    const dur = x.beats * beat;
+    // 同じ音が続くときにタンギングで区切る
+    demoTimer = setTimeout(() => {
+      held.length = 0; refresh();
+      demoTimer = setTimeout(() => step(i + 1), Math.min(60, dur * 0.1));
+    }, dur * 0.9);
+  };
+  step(0);
+}
+sel.addEventListener('change', () => { song = SONGS[+sel.value]; resetSong(); });
+document.getElementById('demo').addEventListener('click', demo);
+document.getElementById('reset').addEventListener('click', resetSong);
+
+showFingering(BY_ID.C5.f);
+resetSong();
+</script>
+</body>
+</html>
